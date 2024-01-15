@@ -12,94 +12,48 @@ output  logic done );
 logic [15:0] a, b;
 enum logic [1:0] {IDLE, CALC, DONE} state, next_state;
 
-// State Transition Logic
-always_ff  @(posedge clk, posedge reset) begin
-
-if (reset) begin
-
-state <= IDLE;
-
-a <=  0;
-b <=  1;
-dout <=  0;
-done <=  0;
-end  else  begin
-state <= next_state;
-
-if (state == CALC) begin
-
-if (b >= din) begin  // Check if the next number will exceed 'din'
-
-next_state <= DONE; // Transition to DONE before updating 'b'
-
-end  else  begin
-
-a <= b;
-
-b <= a + b;
-
+// Sequential block for handling state transitions
+always_ff @(posedge clk, posedge reset) begin
+  if (reset) begin
+    state <= IDLE;
+    a <= 0;
+    b <= 1;
+    // Outputs are not assigned in this block
+  end else begin
+    state <= next_state;
+    if (state == CALC && next_state != DONE) begin
+      a <= b;
+      b <= a + b;
+    end
+  end
 end
 
+// Combinational block for handling output logic
+always_comb begin
+  next_state = state; // Default to hold state
+  dout = 16'd0; // Default assignment for dout
+  done = 1'b0;  // Default assignment for done
+
+  case (state)
+    IDLE: begin
+      if (start) next_state = CALC;
+    end
+    CALC: begin
+      if (b >= din) begin
+        next_state = DONE;
+        dout = b;
+      end else begin
+        dout = b;
+      end
+    end
+    DONE: begin
+      dout = b;
+      done = 1'b1;
+      if (!start) next_state = IDLE;
+    end
+  endcase
 end
 
-end
-
-end
-
-  
-  
-
-// Output Logic
-
-always_comb  begin
-
-next_state = state; // Default to hold state
-
-case (state)
-
-IDLE:  begin
-
-if (start)
-
-next_state = CALC;
-
-dout =  0;
-
-done =  0;
-
-end
-
-CALC:  begin
-
-if (b < din) begin
-
-dout = b;
-
-done =  0;
-
-end  else  begin
-
-next_state = DONE;
-
-dout = b;
-
-end
-
-end
-
-DONE:  begin
-
-dout = b;
-
-done =  1;
-
-if (start ==  0) next_state = IDLE;
-
-end
-
-endcase
-
-end
 
 endmodule
 ```
