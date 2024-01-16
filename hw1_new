@@ -1,0 +1,59 @@
+module fibonacci(
+    input logic clk,
+    input logic reset,
+    input logic [15:0] din,
+    input logic start,
+    output logic [15:0] dout,
+    output logic done
+);
+
+    logic [15:0] a, b;
+    logic [15:0] counter;  // Counter for fibonacci sequence position
+    enum logic [1:0] {IDLE, CALC, DONE} state, next_state;
+
+    // Sequential block for handling state transitions
+    always_ff @(posedge clk, posedge reset) begin
+        if (reset) begin
+            state <= IDLE;
+            a <= 0;
+            b <= 1;
+            counter <= 0;
+        end else begin
+            state <= next_state;
+            if (state == CALC) begin
+                if (counter < din) begin
+                    a <= b;
+                    b <= a + b;
+                    counter <= counter + 1;
+                end
+            end
+        end
+    end
+
+    // Combinational block for handling output logic
+    always_comb begin
+        next_state = state; // Default to hold state
+        dout = 16'd0; // Default assignment for dout
+        done = 1'b0;  // Default assignment for done
+
+        case (state)
+            IDLE: begin
+                if (start) next_state = CALC;
+            end
+            CALC: begin
+                if (counter >= din) begin
+                    next_state = DONE;
+                    dout = a;
+                end
+            end
+            DONE: begin
+                dout = a;
+                done = 1'b1;
+                if (!start) begin
+                    next_state = IDLE;
+                    counter <= 0; // Reset counter for next calculation
+                end
+            end
+        endcase
+    end
+endmodule
