@@ -57,3 +57,9 @@ module fibonacci(
         endcase
     end
 endmodule
+
+vlog -reportprogress 300 -work work ./fibonacci.sv
+vlog -reportprogress 300 -work work ./fibonacci_tb.sv
+vsim work.fibonacci_tb -voptargs=+acc
+add wave -position insertpoint sim:/fibonacci_tb/fib/*
+run 1000ns
