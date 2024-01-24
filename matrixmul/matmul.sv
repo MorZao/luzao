@@ -1,7 +1,7 @@
 module matmul 
 #(  parameter DATA_WIDTH = 32,
     parameter ADDR_WIDTH = 6,
-    parameter N = 8)
+    parameter Tn = 8) // Ensure Tn fits within ADDR_WIDTH bits
 (
     input  logic                  clock,
     input  logic                  reset,
@@ -22,6 +22,7 @@ logic [ADDR_WIDTH-1:0] i, i_c;
 logic [ADDR_WIDTH-1:0] j, j_c;
 logic [ADDR_WIDTH-1:0] k, k_c;
 logic done_c, done_o;
+logic [DATA_WIDTH-1:0] z_din_reg; // Register to hold the partial sum
 
 assign done = done_o;
 
@@ -32,31 +33,34 @@ always_ff @(posedge clock or posedge reset) begin
         i <= '0;
         j <= '0;
         k <= '0;
+        z_din_reg <= '0; // Reset the partial sum
     end else begin
         state <= state_c;
         done_o  <= done_c;
         i <= i_c;
         j <= j_c;
         k <= k_c;
+        if (state_c == BUSY || state_c == WRITE) begin
+            z_din_reg <= $signed(z_din_reg) + ($signed(y_dout) * $signed(x_dout));
+        end else if (state_c == IDLE) begin
+            z_din_reg <= '0; // Reset the partial sum
+        end
     end
 end
 
 always_comb begin
-    // z_din   = 'b0;
-    z_wr_en = 'b0;
-    // z_addr  = 'b0;
-    x_addr  = 'b0;
-    y_addr  = 'b0;
+    z_wr_en = '0;
+    x_addr  = '0;
+    y_addr  = '0;
+    z_din   = '0;
+    z_addr  = '0;
 
     state_c = state;
     i_c     = i;
     j_c     = j;
     k_c     = k;
 
-    done_c  = done_o;    
-
-    // assign x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
-    // assign y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
+    done_c  = done_o;
 
     case (state)
         IDLE: begin
@@ -66,39 +70,39 @@ always_comb begin
             j_c <= '0;
             k_c <= '0;
             if (start == 1'b1) begin
+                k_c = '1;
                 state_c <= BUSY;
-                done_c  <= 1'b0;
+                done_c  = 1'b0;
             end else begin
                 state_c <= IDLE;
             end            
         end
 
         BUSY: begin
-            if (k == N) begin
-                state_c <= WRITE;
-                k_c <= 'b0;
+            if (k == Tn) begin
+                state_c = WRITE;
+                k_c = '0;
             end else begin
-                state_c <= BUSY;
-                k_c <= k + 1;
-                z_din = $signed(z_din) + ($signed(y_dout) * $signed(x_dout));
-                x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
-                y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
+                state_c = BUSY;
+                k_c = k + 1;
+                x_addr = i * Tn + k; // Corrected to ensure the index is within the matrix dimensions
+                y_addr = k * Tn + j; // Corrected similarly
             end
         end 
 
         WRITE: begin
-            z_addr = $unsigned(i) * $unsigned(N) + $unsigned(j);
+            z_addr = i * N + j;
             z_wr_en = 1'b1;
-            if (j == N) begin
-                i_c <= i + 'b1;
-                j_c <= 'b0;
+            if (j == N - 1) begin
+                i_c = i + 'b1;
+                j_c = 'b0;
                 if (i_c == N) begin
                     state_c <= DONE;
                 end else begin
                     state_c <= BUSY;
                 end
             end else begin
-                j_c <= j + 1;
+                j_c = j + 1;
                 state_c <= BUSY;
             end
         end
@@ -108,6 +112,10 @@ always_comb begin
             state_c = IDLE;
         end
     endcase
+
+    if (state == BUSY || state == WRITE) begin
+        z_din = z_din_reg; // Assign the partial sum to the output
+    end
 end
 
 endmodule
