@@ -1,7 +1,7 @@
 module matmul 
 #(  parameter DATA_WIDTH = 32,
     parameter ADDR_WIDTH = 6,
-    parameter N = 8)
+    parameter Tn = 8)
 (
     input  logic                  clock,
     input  logic                  reset,
@@ -16,28 +16,28 @@ module matmul
     output logic                  z_wr_en
 );
 
-typedef enum logic [1:0] {IDLE, BUSY, WRITE, DONE} state_t;
-state_t state, state_c;
-logic [ADDR_WIDTH-1:0] i, i_c;
-logic [ADDR_WIDTH-1:0] j, j_c;
-logic [ADDR_WIDTH-1:0] k, k_c;
-logic done_c, done_o;
+typedef enum logic [1:0] {s0, s1, s2, s3} state_t;
+state_t state, next_state;
+logic [ADDR_WIDTH-1:0] i, next_i;
+logic [ADDR_WIDTH-1:0] j, next_j;
+logic [ADDR_WIDTH-1:0] k, next_k;
+logic next_done, done_o;
 
 assign done = done_o;
 
 always_ff @(posedge clock or posedge reset) begin
     if (reset) begin
-        state <= IDLE;
+        state <= s0;
         done_o <= 1'b0;
         i <= '0;
         j <= '0;
         k <= '0;
     end else begin
-        state <= state_c;
-        done_o  <= done_c;
-        i <= i_c;
-        j <= j_c;
-        k <= k_c;
+        state <= next_state;
+        done_o  <= next_done;
+        i <= next_i;
+        j <= next_j;
+        k <= next_k;
     end
 
     
@@ -48,36 +48,33 @@ always_comb begin
     x_addr  = 'b0;
     y_addr  = 'b0;
 
-    state_c = state;
-    i_c     = i;
-    j_c     = j;
-    k_c     = k;
+    next_state = state;
+    next_i     = i;
+    next_j     = j;
+    next_k     = k;
 
-    done_c  = done_o;    
-
-    // assign x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
-    // assign y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
+    next_done  = done_o;    
 
     case (state)
-        IDLE: begin
+        s0: begin
             z_din   = 'b0;
             z_addr  = 'b0;
-            i_c <= '0;
-            j_c <= '0;
-            k_c <= '0;
+            next_i  = '0;
+            next_j  = '0;
+            next_k  = '0;
             if (start == 1'b1) begin
-                k_c = '1;
-                state_c <= BUSY;
-                done_c  = 1'b0;
+                next_k = '1;
+                next_state = s1;
+                next_done  = 1'b0;
             end else begin
-                state_c <= IDLE;
+                next_state = s0;
             end            
         end
 
-        BUSY: begin
-            if (k == N) begin
-                state_c <= WRITE;
-                k_c <= 'b0;
+        s1: begin
+            if (k == Tn) begin
+                next_state = s2;
+                next_k = 'b0;
                 z_din = $signed(z_din) + ($signed(y_dout) * $signed(x_dout));
             end else begin
                 if (k == 0) begin
@@ -86,34 +83,34 @@ always_comb begin
                 else begin
                     z_din = $signed(z_din) + ($signed(y_dout) * $signed(x_dout));
                 end
-                state_c <= BUSY;
-                k_c = k + 1;
+                next_state = s1;
+                next_k = k + 1;
                 
-                x_addr = i * N + k;
-                y_addr = k * N + j;
+                x_addr = i * Tn + k;
+                y_addr = k * Tn + j;
             end
         end 
 
-        WRITE: begin
-            z_addr = i * N + j;
+        s2: begin
+            z_addr = i * Tn + j;
             z_wr_en = 1'b1;
-            if (j == N - 1) begin
-                i_c = i + 'b1;
-                j_c = 'b0;
-                if (i_c == N) begin
-                    state_c <= DONE;
+            if (j == Tn - 1) begin
+                next_i = i + 'b1;
+                next_j = 'b0;
+                if (next_i == Tn) begin
+                    next_state = s3;
                 end else begin
-                    state_c <= BUSY;
+                    next_state = s1;
                 end
             end else begin
-                j_c = j + 1;
-                state_c <= BUSY;
+                next_j = j + 1;
+                next_state = s1;
             end
         end
 
-        DONE: begin
-            done_c = 1'b1;
-            state_c = IDLE;
+        s3: begin
+            next_done = 1'b1;
+            next_state = s0;
         end
     endcase
 end
