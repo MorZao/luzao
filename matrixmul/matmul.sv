@@ -1,7 +1,7 @@
 module matmul 
 #(  parameter DATA_WIDTH = 32,
     parameter ADDR_WIDTH = 6,
-    parameter Tn = 8)
+    parameter N = 8)
 (
     input  logic                  clock,
     input  logic                  reset,
@@ -55,6 +55,9 @@ always_comb begin
 
     done_c  = done_o;    
 
+    // assign x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
+    // assign y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
+
     case (state)
         IDLE: begin
             z_din   = 'b0;
@@ -72,7 +75,7 @@ always_comb begin
         end
 
         BUSY: begin
-            if (k == Tn) begin
+            if (k == N) begin
                 state_c <= WRITE;
                 k_c <= 'b0;
                 z_din = $signed(z_din) + ($signed(y_dout) * $signed(x_dout));
@@ -86,18 +89,18 @@ always_comb begin
                 state_c <= BUSY;
                 k_c = k + 1;
                 
-                x_addr = i * Tn + k;
-                y_addr = k * Tn + j;
+                x_addr = i * N + k;
+                y_addr = k * N + j;
             end
         end 
 
         WRITE: begin
-            z_addr = i * Tn + j;
+            z_addr = i * N + j;
             z_wr_en = 1'b1;
-            if (j == Tn - 1) begin
+            if (j == N - 1) begin
                 i_c = i + 'b1;
                 j_c = 'b0;
-                if (i_c == Tn) begin
+                if (i_c == N) begin
                     state_c <= DONE;
                 end else begin
                     state_c <= BUSY;
