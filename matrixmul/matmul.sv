@@ -1,4 +1,3 @@
-
 module matmul 
 #(  parameter DATA_WIDTH = 32,
     parameter ADDR_WIDTH = 6,
@@ -24,7 +23,7 @@ logic [ADDR_WIDTH-1:0] j, j_c;
 logic [ADDR_WIDTH-1:0] k, k_c;
 logic done_c, done_o;
 
-assign done <= done_o;
+assign done = done_o;
 
 always_ff @(posedge clock or posedge reset) begin
     if (reset) begin
@@ -43,9 +42,9 @@ always_ff @(posedge clock or posedge reset) begin
 end
 
 always_comb begin
-    z_din   = 'b0;
+    // z_din   = 'b0;
     z_wr_en = 'b0;
-    z_addr  = 'b0;
+    // z_addr  = 'b0;
     x_addr  = 'b0;
     y_addr  = 'b0;
 
@@ -56,11 +55,13 @@ always_comb begin
 
     done_c  = done_o;    
 
-    assign x_addr = unsigned(i) * unsigned(N) + unsigned(k);
-    assign y_addr = unsigned(k) * unsigned(N) + unsigned(j);
+    // assign x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
+    // assign y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
 
     case (state)
         IDLE: begin
+            z_din   = 'b0;
+            z_addr  = 'b0;
             i_c <= '0;
             j_c <= '0;
             k_c <= '0;
@@ -80,11 +81,13 @@ always_comb begin
                 state_c <= BUSY;
                 k_c <= k + 1;
                 z_din = $signed(z_din) + ($signed(y_dout) * $signed(x_dout));
+                x_addr = $unsigned(i) * $unsigned(N) + $unsigned(k);
+                y_addr = $unsigned(k) * $unsigned(N) + $unsigned(j);
             end
         end 
 
         WRITE: begin
-            z_addr = unsigned(i) * unsigned(N) + unsigned(j);
+            z_addr = $unsigned(i) * $unsigned(N) + $unsigned(j);
             z_wr_en = 1'b1;
             if (j == N) begin
                 i_c <= i + 'b1;
@@ -103,19 +106,6 @@ always_comb begin
         DONE: begin
             done_c = 1'b1;
             state_c = IDLE;
-        end
-
-        default: begin
-            z_din   = 'x;
-            z_wr_en = 'x;
-            z_addr  = 'x;
-            x_addr  = 'x;
-            y_addr  = 'x;
-            state_c = s0;
-            i_c     = 'x;
-            j_c     = 'x;
-            k_c     = 'x;
-            done_c  = 'x;
         end
     endcase
 end
