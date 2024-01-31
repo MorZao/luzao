@@ -92,67 +92,54 @@ end
 
 initial begin : img_read_process
     int i, r;
-    int in_file_base;
-    logic [7:0] bmp_header [0:BMP_HEADER_SIZE-1];
+    int in_file_base, in_file_img;
+    logic [7:0] bmp_header_base [0:BMP_HEADER_SIZE-1];
+    logic [7:0] bmp_header_img [0:BMP_HEADER_SIZE-1];
 
     @(negedge reset);
-    $display("@ %0t: Loading file %s...", $time, IMG_IN_BASE_NAME);
+    $display("@ %0t: Loading base file %s...", $time, IMG_IN_BASE_NAME);
+    $display("@ %0t: Loading img file %s...", $time, IMG_IN_IMG_NAME);
 
-    in_file = $fopen(IMG_IN_BASE_NAME, "rb");
-    in_wr_en = 1'b0;
+    in_file_base = $fopen(IMG_IN_BASE_NAME, "rb");
+    in_file_img = $fopen(IMG_IN_IMG_NAME, "rb");
+    in_wr_en_base = 1'b0;
+    in_wr_en_img = 1'b0;
 
-    // Skip BMP header
-    r = $fread(bmp_header, in_file, 0, BMP_HEADER_SIZE);
+    // Skip BMP headers
+    r = $fread(bmp_header_base, in_file_base, 0, BMP_HEADER_SIZE);
+    r = $fread(bmp_header_img, in_file_img, 0, BMP_HEADER_SIZE);
 
-    // Read data from image file
+    // Read data from image files
     i = 0;
-    while ( i < BMP_DATA_SIZE ) begin
+    while (i < BMP_DATA_SIZE) begin
         @(negedge clock);
-        in_wr_en = 1'b0;
+        in_wr_en_base = 1'b0;
+        in_wr_en_img = 1'b0;
+
+        // Read from base file
         if (in_full_base == 1'b0) begin
             r = $fread(in_din_base, in_file_base, BMP_HEADER_SIZE+i, BYTES_PER_PIXEL);
-            in_wr_en = 1'b1;
-            i += BYTES_PER_PIXEL;
+            in_wr_en_base = 1'b1;
         end
-    end
 
-    @(negedge clock);
-    in_wr_en = 1'b0;
-    $fclose(in_file_base);
-    in_write_done_base = 1'b1;
-end
-
-initial begin : img_read_process
-    int i, r;
-    int in_file_img;
-    logic [7:0] bmp_header [0:BMP_HEADER_SIZE-1];
-
-    @(negedge reset);
-    $display("@ %0t: Loading file %s...", $time, IMG_IN_IMG_NAME);
-
-    in_file = $fopen(IMG_IN_IMG_NAME, "rb");
-    in_wr_en = 1'b0;
-
-    // Skip BMP header
-    r = $fread(bmp_header, in_file_img, 0, BMP_HEADER_SIZE);
-
-    // Read data from image file
-    i = 0;
-    while ( i < BMP_DATA_SIZE ) begin
-        @(negedge clock);
-        in_wr_en = 1'b0;
+        // Read from img file
         if (in_full_img == 1'b0) begin
             r = $fread(in_din_img, in_file_img, BMP_HEADER_SIZE+i, BYTES_PER_PIXEL);
-            in_wr_en = 1'b1;
-            i += BYTES_PER_PIXEL;
+            in_wr_en_img = 1'b1;
         end
+
+        i += BYTES_PER_PIXEL;
     end
 
     @(negedge clock);
-    in_wr_en = 1'b0;
+    in_wr_en_base = 1'b0;
+    in_wr_en_img = 1'b0;
+    $fclose(in_file_base);
     $fclose(in_file_img);
+    in_write_done_base = 1'b1;
     in_write_done_img = 1'b1;
 end
+
 
 initial begin : img_write_process
     int i, r;
