@@ -6,16 +6,17 @@ module subtract_top #(
     input  logic        reset,
     output logic        in_full_base,
     output logic        in_full_img,
-    input  logic        in_wr_en,
-    input  logic [7:0] in_din_base,
-    input  logic [7:0] in_din_img,
+    input  logic        in_wr_en_base,
+    input  logic        in_wr_en_img,
+    input  logic [23:0] in_din_base,
+    input  logic [23:0] in_din_img,
     output logic        out_empty,
     input  logic        out_rd_en,
     output logic [7:0]  out_dout
 );
 
-logic  [7:0] in_dout_base;
-logic  [7:0] in_dout_img;
+logic  [23:0] in_dout_base;
+logic  [23:0] in_dout_img;
 logic        in_empty_base;
 logic        in_empty_img;
 logic        in_rd_en_base;
@@ -25,16 +26,16 @@ logic        out_full;
 logic        out_wr_en;
 
 
-grayscale #(
+subtract #(
 ) subtract_inst (
     .clock(clock),
     .reset(reset),
     .in_dout_base(in_dout_base),
     .in_dout_img(in_dout_img),
-    .in_rd_en(in_rd_en_base),
-    .in_rd_en(in_rd_en_img),
-    .in_empty(in_empty_base),
-    .in_empty(in_empty_img),
+    .in_rd_en_base(in_rd_en_base),
+    .in_rd_en_img(in_rd_en_img),
+    .in_empty_base(in_empty_base),
+    .in_empty_img(in_empty_img),
     .out_din(out_din),
     .out_full(out_full),
     .out_wr_en(out_wr_en)
@@ -42,11 +43,11 @@ grayscale #(
 
 fifo #(
     .FIFO_BUFFER_SIZE(256),
-    .FIFO_DATA_WIDTH(8)
+    .FIFO_DATA_WIDTH(24)
 ) fifo_in_base_inst (
     .reset(reset),
     .wr_clk(clock),
-    .wr_en(in_wr_en),
+    .wr_en(in_wr_en_base),
     .din(in_din_base),
     .full(in_full_base),
     .rd_clk(clock),
@@ -57,16 +58,16 @@ fifo #(
 
 fifo #(
     .FIFO_BUFFER_SIZE(256),
-    .FIFO_DATA_WIDTH(8)
+    .FIFO_DATA_WIDTH(24)
 ) fifo_in_img_inst (
     .reset(reset),
     .wr_clk(clock),
-    .wr_en(in_wr_en),
+    .wr_en(in_wr_en_img),
     .din(in_din_img),
     .full(in_full_img),
     .rd_clk(clock),
     .rd_en(in_rd_en_img),
-    .dout(in_dout_base),
+    .dout(in_dout_img),
     .empty(in_empty_img)
 );
 
