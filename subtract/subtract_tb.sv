@@ -16,9 +16,10 @@ logic done  = '0;
 
 logic        in_full_base;
 logic        in_full_img;
-logic        in_wr_en    = '0;
-logic  [7:0] in_din_base = '0;
-logic  [7:0] in_din_img  = '0;
+logic        in_wr_en_base = '0;
+logic        in_wr_en_img  = '0;
+logic  [23:0] in_din_base   = '0;
+logic  [23:0] in_din_img    = '0;
 logic        out_rd_en;
 logic        out_empty;
 logic  [7:0] out_dout;
@@ -29,8 +30,8 @@ logic   in_write_done_img = '0;
 logic   out_read_done = '0;
 integer out_errors    = '0;
 
-localparam WIDTH = 720;
-localparam HEIGHT = 540;
+localparam WIDTH = 768;
+localparam HEIGHT = 576;
 localparam BMP_HEADER_SIZE = 54;
 localparam BYTES_PER_PIXEL = 3;
 localparam BMP_DATA_SIZE = WIDTH*HEIGHT*BYTES_PER_PIXEL;
@@ -43,7 +44,8 @@ subtract_top #(
     .reset(reset),
     .in_full_base(in_full_base),
     .in_full_img(in_full_img),
-    .in_wr_en(in_wr_en),
+    .in_wr_en_base(in_wr_en_base),
+    .in_wr_en_img(in_wr_en_img),
     .in_din_base(in_din_base),
     .in_din_img(in_din_img),
     .out_empty(out_empty),
@@ -139,7 +141,6 @@ initial begin : img_read_process
     in_write_done_base = 1'b1;
     in_write_done_img = 1'b1;
 end
-
 
 initial begin : img_write_process
     int i, r;
