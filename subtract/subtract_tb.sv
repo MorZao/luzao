@@ -118,19 +118,18 @@ initial begin : img_read_process
         in_wr_en_base = 1'b0;
         in_wr_en_img = 1'b0;
 
-        // Read from base file
-        if (in_full_base == 1'b0) begin
+        // Check if both FIFOs are ready
+        if (!in_full_base && !in_full_img) begin
+            // Read from base file
             r = $fread(in_din_base, in_file_base, BMP_HEADER_SIZE+i, BYTES_PER_PIXEL);
             in_wr_en_base = 1'b1;
-        end
 
-        // Read from img file
-        if (in_full_img == 1'b0) begin
+            // Read from img file
             r = $fread(in_din_img, in_file_img, BMP_HEADER_SIZE+i, BYTES_PER_PIXEL);
             in_wr_en_img = 1'b1;
-        end
 
-        i += BYTES_PER_PIXEL;
+            i += BYTES_PER_PIXEL;
+        end
     end
 
     @(negedge clock);
@@ -141,6 +140,7 @@ initial begin : img_read_process
     in_write_done_base = 1'b1;
     in_write_done_img = 1'b1;
 end
+
 
 initial begin : img_write_process
     int i, r;
