@@ -1,61 +1,55 @@
+
 module sobel #(
-    parameter integer ROW_WIDTH = 720,
-    parameter integer DATA_WIDTH = 8
-)(
-    input logic clk,
-    input logic reset,
-    output logic in_rd_en,
-    input logic in_empty,
-    input logic [DATA_WIDTH-1:0] in_dout,
-    output logic out_wr_en,
-    input logic out_full,
-    output logic [DATA_WIDTH-1:0] out_din
+    parameter SIZE = 1443,
+    parameter DATA_WIDTH = 8
+) (
+    input  logic        clock,
+    input  logic        reset,
+    output logic        in_rd_en,
+    input  logic        in_empty,
+    input  logic [7:0] in_dout,
+    output logic        out_wr_en,
+    input  logic        out_full,
+    output logic [7:0]  out_din
 );
 
+typedef enum logic [1:0] {IDLE, UPDATE, CACULATE, WRITE} state_types;
+state_types state, state_c;
 
-typedef enum {IDLE, READ, PROCESS, WRITE, UPDATE_BUFFERS} state_t;
-state_t state, next_state;
+logic [7:0] sb, sb_c;
 
-logic[DATA_WIDTH-1:0] buffer1[BUFFER_WIDTH-1:0];
-logic[DATA_WIDTH-1:0] buffer2[BUFFER_WIDTH-1:0];
-logic[DATA_WIDTH-1:0] buffer3[BUFFER_WIDTH-1:0];
-logic[DATA_WIDTH-1:0] shift_matrix[2:0][2:0];
+logic [18:0] counter;
+logic [18:0] counter_c;
 
-logic[9:0] horizontal_gradient;
-logic[9:0] horizontal_gradient_abs;
-logic[9:0] vertical_gradient;
-logic[9:0] vertical_gradient_abs;
-logic[9:0] v;
-logic[7:0] sbl;
-logic[7:0] sbl_c;
+logic paddingControl;
 
-logic [9:0] col_count , row_count , next_col_count , next_row_count;
+logic [DATA_WIDTH-1:0] register__array[SIZE-1:0];
+logic [DATA_WIDTH-1:0] register__array_c[SIZE-1:0];
 
-// Define logic for gradients, abs gradients, and other Sobel-related variables
+// 定义梯度计算结果变量
+logic signed [15:0] horizontal_gradient; 
+logic signed [15:0] vertical_gradient;   
+logic signed [15:0] horizontal_gradient_abs; 
+logic signed [15:0] vertical_gradient_abs;   
+logic [15:0] gradient_avg;
+logic [7:0] edge_strength; 
 
-always_ff @(posedge clk or posedge reset) begin
-    if (reset) begin
+
+    
+
+
+
+always_ff @(posedge clock or posedge reset) begin
+    if (reset == 1'b1) begin
         state <= IDLE;
-        col_count <= 0;
-        row_count <= 0;
-        // Initialize buffers and shift_matrix to 0
-       for (int i = 0; i < ROW_WIDTH; i++) begin
-            buffer1[i] <= 0;
-            buffer2[i] <= 0;
-            buffer3[i] <= 0;
-        end
-
-        for (int i = 0; i < 3; i++) begin
-            for (int j = 0; j < 3; j++) begin
-                shift_matrix[i][j] <= 0;
-            end
-        end
-
+        sb <= 8'h0;
+        counter <= 0;
+        
     end else begin
-        state <= next_state;
-        col_count <= next_col_count;
-        row_count <= next_row_count;
-        sbl <= sbl_c;
+        state <= state_c;
+        sb <= sb_c;
+        register__array <= register__array_c;
+        counter <= counter_c;
     end
 end
 
@@ -63,75 +57,113 @@ always_comb begin
     in_rd_en  = 1'b0;
     out_wr_en = 1'b0;
     out_din   = 8'b0;
-    next_state   = state;
-    sbl_c = sbl;
+    state_c   = state;
+    sb_c = sb;
 
-        case (state)
-            IDLE: begin
-                if (!in_empty) next_state = READ;
+
+    horizontal_gradient = register__array[2] + (2 * register__array[1]) + register__array[0]
+                        - register__array[1442] - (2 * register__array[1441]) - register__array[1440];
+    vertical_gradient = register__array[1440] + (2 * register__array[720]) + register__array[0]
+                    - register__array[1442] - (2 * register__array[722]) - register__array[2];
+
+
+    horizontal_gradient_abs = horizontal_gradient[15] ? -horizontal_gradient : horizontal_gradient;
+    vertical_gradient_abs = vertical_gradient[15] ? -vertical_gradient : vertical_gradient;
+
+    gradient_avg = (horizontal_gradient_abs + vertical_gradient_abs) / 2;
+    edge_strength = gradient_avg > 255 ? 8'hFF : gradient_avg[7:0];
+
+    paddingControl = (counter - 1) < 720 || ( counter - 720 - 1 )  >= 388080 || (counter - 1)  % 720 == 1 || (counter - 1) % 720 == 0;
+
+    case (state)
+
+
+        IDLE: begin
+            counter_c = 0;
+            for (int i = 0; i < SIZE; ++i) begin
+                register__array_c[i] = 0;
             end
-            READ: begin
-                // Implement reading and updating shift_matrix logic
-                buffer3[col_count] = in_dout; 
-
-                shift_matrix[0][0] = shift_matrix[0][1];
-                shift_matrix[0][1] = shift_matrix[0][2];
-                shift_matrix[0][2] = buffer1[col_count+1];
-                shift_matrix[1][0] = shift_matrix[1][1];
-                shift_matrix[1][1] = shift_matrix[1][2];
-                shift_matrix[1][2] = buffer2[col_count+1];
-                shift_matrix[2][0] = shift_matrix[2][1];
-                shift_matrix[2][1] = shift_matrix[2][2];
-                shift_matrix[2][2] = in_dout;
-
-                next_col_count = col_count + 1;
-                if (col_count >= ROW_WIDTH) next_state = UPDATE_BUFFERS;
-                else if (col_count >= 1 and row_count >= 1) next_state = PROCESS; //need change, 
-                else next_state = READ;
+            if (in_empty == 1'b1) begin
+                state_c = IDLE;
+                in_rd_en = 1'b0;
             end
-            PROCESS: begin
-                if (in_empty == 1'b0) begin
-                    horizontal_gradient = shift_matrix[2][0] + 2 * shift_matrix[2][1] + shift_matrix[2][2] - shift_matrix[0][0] - 2 * shift_matrix[0][1] - shift_matrix[0][2];
-                    vertical_gradient = shift_matrix[0][2] + 2 * shift_matrix[1][2] + shift_matrix[2][2] - shift_matrix[0][0] - 2 * shift_matrix[1][0] - shift_matrix[2][0];
-                    if (horizontal_gradient[9]) begin
-                        horizontal_gradient_abs = -horizontal_gradient; 
-                    end else begin
-                        horizontal_gradient_abs = horizontal_gradient;
+            else begin
+                state_c = UPDATE;
+                in_rd_en = 1'b0;
+            end
+            sb_c = 0;
+            out_wr_en = 0;
+        end
+
+        UPDATE:begin
+            if (!in_empty) begin
+                if (counter < 1442) begin
+                    if (counter < 721) begin
+                        state_c = WRITE;
+                        sb_c = 0;
                     end
-                    if (vertical_gradient[9]) begin
-                    vertical_gradient_abs = -vertical_gradient; 
-                    end else begin
-                    vertical_gradient_abs = vertical_gradient;
-                    end
-                    v = (horizontal_gradient_abs + vertical_gradient_abs)/2
-  
-                    sbl_c = v > 0xFF ? 0xFF :v[7:0];
-                    in_rd_en = 1'b1;
-                    next_state = WRITE;
+                    else if (counter >= 721) begin
+                        state_c = UPDATE;
+                    end                     
+                end
+                else begin
+                    state_c = CACULATE;
+                end
+                in_rd_en = 1'b1;
+                counter_c = counter + 1;
+                for (int j = SIZE-1; j > 0; j = j - 1) begin
+                    register__array_c[j] = register__array[j-1];
+                end
+                register__array_c[0] = in_dout;
+            end
+            else begin
+                if (counter >= 388800) begin
+                    state_c = WRITE;
+                    sb_c = 0;
+                end
+                else begin
+                    state_c = UPDATE;
+                    in_rd_en = 1'b0;
                 end
             end
-            WRITE: begin
-                if (out_full == 1'b0) begin
-                out_din = sbl;
+            out_wr_en = 0;
+
+
+        end
+
+        CACULATE:begin
+            in_rd_en = 1'b0;
+            state_c = WRITE;
+            if(paddingControl) begin
+                sb_c = 0;
+            end
+            else begin
+                sb_c = edge_strength;
+            end
+            out_wr_en = 0;
+        end
+
+        WRITE: begin
+            if (out_full == 1'b0) begin  
+                out_din = sb;
                 out_wr_en = 1'b1;
-                next_state = READ;
-                end
+                state_c = counter >= 389521 ? IDLE : UPDATE; 
+                in_rd_en = 1'b0;
             end
-            UPDATE_BUFFERS: begin
-                buffer3[0] = 0;  
-                buffer3[BUFFER_WIDTH-1] = 0;  
 
-                buffer1 = buffer2;
-                buffer2 = buffer3;
 
-                next_col_count = 0; 
-                next_row_count = row_count + 1;
+            
+        end
 
-                next_state = IDLE;
-            end
-            default: next_state = IDLE;
-        endcase
+        default: begin
+            in_rd_en  = 1'b0;
+            out_wr_en = 1'b0;
+            out_din = 8'b0;
+            state_c = IDLE;
+            sb_c = 8'hX;
+        end
+
+    endcase
 end
-
 
 endmodule
